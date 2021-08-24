@@ -8,15 +8,7 @@ RUN apt-get --allow-releaseinfo-change update \
 
 RUN conda update conda \
     && conda install -y -c conda-forge \
-           jupyter-repo2docker \
-    && useradd -ms /bin/bash normaluser \
-       && echo "normaluser:password" | chpasswd
-
-RUN groupadd docker \
-      && usermod -aG docker normaluser
-
-USER normaluser
-WORKDIR /home/normaluser
+           jupyter-repo2docker
 
 ENTRYPOINT []
 CMD []

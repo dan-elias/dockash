@@ -1,11 +1,24 @@
 #!/bin/bash
 
+app_name=jupyter-repo2docker
+image=dockash_$app_name:latest
+dockerfile_url=https://raw.githubusercontent.com/dan-elias/dockash/master/src/$app_name/Dockerfile 
+
+if [[ "$(docker images -q $image 2> /dev/null)" == "" ]]; then
+    docker build --tag $image - < curl $dockerfile_url
+fi
+
 docker run \
     --rm \
     -i -t  \
-    --volume $HOME:/home/normaluser
+    --env HOME \
+    --env USER \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --user $(id -u ${USER}):$(id -g ${USER}) \
+    --volume $HOME.gitconfig:$HOME.gitconfig \
+    --volume $HOME.git-credentials:$HOME.git-credentials \
     --volume /var/run/docker.sock:/var/run/docker.sock \
     --volume `pwd`:/work \
     --workdir="/work" \
-    danelias/jupyter-repo2docker:latest \
-    jupyter-repo2docker $@
+    $image \
+    $app_name $@

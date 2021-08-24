@@ -10,5 +10,7 @@ RUN conda update conda \
     && conda install -y -c conda-forge \
            jupyter-repo2docker
 
+ENV SHELL /bin/bash
+
 ENTRYPOINT []
 CMD []

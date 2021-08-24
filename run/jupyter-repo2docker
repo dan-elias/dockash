@@ -1,0 +1,11 @@
+#!/bin/bash
+
+docker run \
+    --rm \
+    -i -t  \
+    --volume $HOME:/home/normaluser
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --volume `pwd`:/work \
+    --workdir="/work" \
+    danelias/jupyter-repo2docker:latest \
+    jupyter-repo2docker $@

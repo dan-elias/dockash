@@ -1,0 +1,11 @@
+#!/bin/bash
+
+docker run \
+    --rm \
+    --env DISPLAY \
+    --volume /tmp/.X11-unix:/tmp/.X11-unix:ro \
+    --volume ${XAUTHORITY}:/root/.Xauthority:ro \
+    --device /dev/snd \
+    --shm-size=1gb \
+    binder_apps_firefox:latest \
+    firefox $@

@@ -1,0 +1,10 @@
+#!/bin/bash
+
+docker run \
+    --rm \
+    -i -t  \
+    --volume $HOME:/home/normaluser \
+    --volume `pwd`:/work \
+    --workdir="/work" \
+    binder_apps_git:latest \
+    git $@

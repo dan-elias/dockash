@@ -1,0 +1,9 @@
+#!/bin/bash
+
+docker run \
+    --rm \
+    -i -t  \
+    --volume `pwd`:/work \
+    --workdir="/work \
+    binder_apps_cookiecutter:latest \
+    cookiecutter $@

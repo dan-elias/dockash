@@ -1,9 +1,26 @@
 #!/bin/bash
 
+set -e
+
+app_name=$(basename $0)
+image=dockash_${USER}_${app_name}:latest
+
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    jupyter-repo2docker  \
+        --image-name ${image} \
+        --subdir src/${app_name} \
+        https://github.com/dan-elias/dockash \
+        echo
+fi
+
 docker run \
     --rm \
     -i -t  \
-    --volume `pwd`:/work \
-    --workdir="/work \
-    binder_apps_cookiecutter:latest \
-    cookiecutter $@
+    --env HOME \
+    --env USER \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
+    --user $(id -u ${USER}):$(id -g ${USER}) \
+    --volume $(pwd):/work \
+    --workdir="/work" \
+    ${image} \
+    ${app_name} $@

@@ -1,6 +1,8 @@
 #!/bin/bash
 
-app_name=jupyter-repo2docker
+set -e
+
+app_name=$(basename $0)
 image=dockash_${USER}_${app_name}:latest
 dockerfile_url=https://raw.githubusercontent.com/dan-elias/dockash/master/src/${app_name}/Dockerfile 
 

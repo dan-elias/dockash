@@ -1,5 +1,18 @@
 #!/bin/bash
 
+set -e
+
+app_name=$(basename $0)
+image=dockash_${USER}_${app_name}:latest
+
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    jupyter-repo2docker  \
+        --image-name ${image} \
+        --subdir src/${app_name} \
+        https://github.com/dan-elias/dockash \
+        echo
+fi
+
 docker run \
     --rm \
     --env DISPLAY \
@@ -7,5 +20,5 @@ docker run \
     --volume ${XAUTHORITY}:/root/.Xauthority:ro \
     --device /dev/snd \
     --shm-size=1gb \
-    binder_apps_firefox:latest \
-    firefox $@
+    ${image} \
+    ${app_name} $@

@@ -25,7 +25,16 @@ Most of the programs require `jupyter-repo2docker`_ (included in this repo)
 Usage
 -----
 
-Download the desired scripts from the run_ folder and make them executable.
+Download the desired scripts from the run_ folder and make them executable (and
+locatable on `PATH`).  Include `jupyter-repo2docker`_ because it is required by
+the others.  
+
+Also, currently, `jupyter-repo2docker`_ requires write access to the docker
+socket.  An insecure but quick hack to achieve this is:
+
+```bash
+sudo chmod 666 /var/run/docker.sock
+```
 
 
 .. _jupyter-repo2docker: run/jupyter-repo2docker

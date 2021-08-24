@@ -1,10 +1,33 @@
 #!/bin/bash
 
+set -e
+
+app_name=$(basename $0)
+image=dockash_${USER}_${app_name}:latest
+
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    jupyter-repo2docker  \
+        --image-name ${image} \
+        --subdir src/${app_name} \
+        https://github.com/dan-elias/dockash \
+        echo
+fi
+
+for f in ~/.gitconfig ~/git-credentials; do
+    [ $f ] || touch $f
+done
+
 docker run \
     --rm \
     -i -t  \
-    --volume $HOME:/home/normaluser \
-    --volume `pwd`:/work \
+    --env HOME \
+    --env USER \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
+    --user $(id -u ${USER}):$(id -g ${USER}) \
+    --volume ${HOME}.gitconfig:${HOME}.gitconfig \
+    --volume ${HOME}.git-credentials:${HOME}.git-credentials \
+    --volume $(pwd):/work \
     --workdir="/work" \
-    binder_apps_git:latest \
-    git $@
+    ${image} \
+    ${app_name} $@
+

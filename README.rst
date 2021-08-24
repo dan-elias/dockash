@@ -2,7 +2,7 @@
 Dockash
 =======
 
-Progrms (collectively) requiring only Docker and Bash
+Programs (collectively) requiring only Docker and Bash
 
 
 This repo contains bash scripts that run containerized programs.  This provides

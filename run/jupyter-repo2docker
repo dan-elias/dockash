@@ -1,11 +1,11 @@
 #!/bin/bash
 
 app_name=jupyter-repo2docker
-image=dockash_$USER_$app_name:latest
-dockerfile_url=https://raw.githubusercontent.com/dan-elias/dockash/master/src/$app_name/Dockerfile 
+image=dockash_${USER}_${app_name}:latest
+dockerfile_url=https://raw.githubusercontent.com/dan-elias/dockash/master/src/${app_name}/Dockerfile 
 
-if [[ "$(docker images -q $image 2> /dev/null)" == "" ]]; then
-    docker build --tag $image - < curl $dockerfile_url
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    curl ${dockerfile_url} | docker build --tag ${image} - 
 fi
 
 docker run \
@@ -13,12 +13,12 @@ docker run \
     -i -t  \
     --env HOME \
     --env USER \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     --user $(id -u ${USER}):$(id -g ${USER}) \
-    --volume $HOME.gitconfig:$HOME.gitconfig \
-    --volume $HOME.git-credentials:$HOME.git-credentials \
+    --volume ${HOME}.gitconfig:${HOME}.gitconfig \
+    --volume ${HOME}.git-credentials:${HOME}.git-credentials \
     --volume /var/run/docker.sock:/var/run/docker.sock \
-    --volume `pwd`:/work \
+    --volume $(pwd):/work \
     --workdir="/work" \
-    $image \
-    $app_name $@
+    ${image} \
+    ${app_name} $@

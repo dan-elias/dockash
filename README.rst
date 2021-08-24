@@ -6,9 +6,7 @@ Programs (collectively) requiring only Docker and Bash
 
 
 This repo contains bash scripts that run containerized programs.  This provides
-an alternative to actually installing the programs on the host system and also
-ensures the same version of the program and its dependencies on different
-computers. 
+an alternative to actually installing the programs on the host system.
 
 
 Requirements

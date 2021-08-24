@@ -30,7 +30,7 @@ the others.
 Also, currently, `jupyter-repo2docker`_ requires write access to the docker
 socket.  An insecure but quick hack to achieve this is:
 
-..code:: bash
+.. code:: bash
 
     sudo chmod 666 /var/run/docker.sock
 

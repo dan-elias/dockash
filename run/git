@@ -13,8 +13,12 @@ if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
         echo
 fi
 
-for f in ~/.gitconfig ~/git-credentials; do
-    [ $f ] || touch $f
+config_volumes=()
+for f in .gitconfig .git-credentials
+do
+    full_path=${HOME}/$f
+    [ $full_path ] || touch $full_path
+    config_volumes+=("--volume ${full_path}:${full_path}")
 done
 
 docker run \
@@ -24,8 +28,7 @@ docker run \
     --env USER \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     --user $(id -u ${USER}):$(id -g ${USER}) \
-    --volume ${HOME}.gitconfig:${HOME}.gitconfig \
-    --volume ${HOME}.git-credentials:${HOME}.git-credentials \
+    ${config_volumes[@]} \
     --volume $(pwd):/work \
     --workdir="/work" \
     ${image} \

@@ -17,8 +17,8 @@ config_volumes=()
 for f in .gitconfig .git-credentials
 do
     full_path=${HOME}/$f
-    [ $full_path ] || touch $full_path
-    config_volumes+=("--volume ${full_path}:${full_path}")
+    [[ -f $full_path ]] || echo " " > $full_path
+    config_volumes+=("--volume $full_path:$full_path")
 done
 
 docker run \

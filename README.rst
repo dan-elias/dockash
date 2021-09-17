@@ -27,12 +27,7 @@ Download the desired scripts from the bin_ folder and make them executable (and
 locatable on `PATH`).  Include `jupyter-repo2docker`_ because it is required by
 the others.  
 
-Also, currently, `jupyter-repo2docker`_ requires write access to the docker
-socket.  An insecure but quick hack to achieve this is to expand the permissions
-on the docker socket.  The permission_docker_sock_ script does this.
 
 
-
-.. _permission_docker_sock: bin/permission_docker_sock
 .. _jupyter-repo2docker: bin/jupyter-repo2docker
 .. _bin: bin

@@ -2,6 +2,9 @@
 
 set -e
 
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+add_groups="${grps[*]/#/--group-add }"
+
 app_name=$(basename $0)
 image=dockash_${USER}_${app_name}:latest
 
@@ -20,6 +23,7 @@ docker run \
     --env USER \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     --user $(id -u ${USER}):$(id -g ${USER}) \
+    $add_groups \
     --volume $(pwd):/work \
     --workdir="/work" \
     ${image} \

@@ -21,4 +21,4 @@ docker run \
     --device /dev/snd \
     --shm-size=1gb \
     ${image} \
-    ${app_name} $@
+    ${app_name} "$@"

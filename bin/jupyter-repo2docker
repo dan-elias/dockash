@@ -35,4 +35,4 @@ docker run \
     --volume $(pwd):/work \
     --workdir="/work" \
     ${image} \
-    ${app_name} $@
+    ${app_name} "$@"

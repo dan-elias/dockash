@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -e
+
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+add_groups="${grps[*]/#/--group-add }"
+
+app_name=$(basename $0)
+image=dockash_${USER}_${app_name}:latest
+
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    jupyter-repo2docker  \
+        --image-name ${image} \
+        --subdir src/${app_name} \
+        https://github.com/dan-elias/dockash \
+        echo
+fi
+
+docker run \
+    --rm \
+    -i -t  \
+    --env HOME \
+    --env USER \
+    --user $(id -u ${USER}):$(id -g ${USER}) \
+    $add_groups \
+    --volume /var/run/docker.sock:/var/run/docker.sock \
+    --volume $(pwd):/work \
+    --workdir="/work" \
+    ${image} \
+    ${app_name} "$@"

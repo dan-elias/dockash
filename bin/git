@@ -29,7 +29,6 @@ docker run \
     -i -t  \
     --env HOME \
     --env USER \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     --user $(id -u ${USER}):$(id -g ${USER}) \
     $add_groups \
     ${config_volumes[@]} \

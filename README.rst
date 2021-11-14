@@ -28,6 +28,13 @@ locatable on `PATH`).  Include `jupyter-repo2docker`_ because it is required by
 the others.  
 
 
+Notes
+-----
+
+containerized-firefox_ is an example GUI app with X11 and sound enabled
+
+
 
 .. _jupyter-repo2docker: bin/jupyter-repo2docker
+.. _containerized-firefox: bin/containerized-firefox
 .. _bin: bin

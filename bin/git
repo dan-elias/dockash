@@ -33,7 +33,7 @@ done
 
 docker run \
     --rm \
-    -i -t  \
+    -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` \
     --env HOME \
     --env USER \
     --user $(id -u ${USER}):$(id -g ${USER}) \

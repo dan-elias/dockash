@@ -29,7 +29,7 @@ done
 
 docker run \
     --rm \
-    -i -t  \
+    -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` \
     --env HOME \
     --env USER \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \

@@ -2,9 +2,6 @@
 
 set -e
 
-IFS=', ' read -r -a grps <<< "$(id -G $USER)"
-add_groups="${grps[*]/#/--group-add }"
-
 app_name=$(basename $0)
 image=dockash_${USER}_${app_name}:latest
 
@@ -23,24 +20,16 @@ if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
     popd
 fi
 
-config_volumes=()
-for f in .gitconfig .git-credentials
-do
-    full_path=${HOME}/$f
-    [[ -f $full_path ]] || echo " " > $full_path
-    config_volumes+=("--volume $full_path:$full_path")
-done
-
 docker run \
     --rm \
     -i -t  \
     --env HOME \
     --env USER \
+    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
+    --mount type=bind,source=$HOME/.kaggle,target=$HOME/.kaggle \
     --user $(id -u ${USER}):$(id -g ${USER}) \
     $add_groups \
-    ${config_volumes[@]} \
     --volume $(pwd):/work \
     --workdir="/work" \
     ${image} \
     ${app_name} "$@"
-

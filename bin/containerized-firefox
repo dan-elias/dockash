@@ -6,19 +6,26 @@ app_name=$(basename $0)
 image=dockash_${USER}_${app_name}:latest
 
 if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    pushd ${DOCKASH_SOURCE:-.}
+    if [[ "$DOCKASH_SOURCE" == "" ]]; then
+        repo=https://github.com/dan-elias/dockash
+    else
+        repo=.
+    fi
     jupyter-repo2docker  \
         --image-name ${image} \
         --subdir src/${app_name} \
-        https://github.com/dan-elias/dockash \
+        $repo \
         echo
+    popd
 fi
+
+uid=$(id -u)
 
 docker run \
     --rm \
-    --env DISPLAY \
-    --volume /tmp/.X11-unix:/tmp/.X11-unix:ro \
-    --volume ${XAUTHORITY}:/root/.Xauthority:ro \
-    --device /dev/snd \
+    --env DISPLAY --mount type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix --mount type=bind,source=${XAUTHORITY},target=/root/.Xauthority \
+    --env PULSE_SERVER=unix:/run/user/$uid/pulse/native --mount type=bind,source=/run/user/$uid/pulse/native,target=/run/user/$uid/pulse/native \
     --shm-size=1gb \
     ${image} \
-    ${app_name} "$@"
+    firefox "$@"

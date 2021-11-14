@@ -2,3 +2,4 @@ firefox
 libcanberra-gtk-module
 libcanberra-gtk3-module
 xauth
+pulseaudio-utils

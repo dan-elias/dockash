@@ -35,6 +35,13 @@ containerized-firefox_ is an example GUI app with X11 and sound enabled
 
 
 
+Other similar resources
+-----------------------
+
+* zoom_:  `mdouchement/zoom-us`_
+
 .. _jupyter-repo2docker: bin/jupyter-repo2docker
 .. _containerized-firefox: bin/containerized-firefox
 .. _bin: bin
+.. _zoom: https://zoom.us/
+.. _mdouchement/zoom-us: https://github.com/mdouchement/docker-zoom-us

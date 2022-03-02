@@ -2,9 +2,6 @@
 
 set -e
 
-IFS=', ' read -r -a grps <<< "$(id -G $USER)"
-add_groups="${grps[*]/#/--group-add }"
-
 app_name=$(basename $0)
 image=dockash_${USER}_${app_name}:latest
 
@@ -22,6 +19,9 @@ if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
         echo
     popd
 fi
+
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+add_groups="${grps[*]/#/--group-add }"
 
 docker run \
     --rm \

@@ -3,6 +3,7 @@
 set -e
 
 app_name=$(basename $0)
+entrypoint=${app_name#containerized-}
 image=dockash_${USER}_${app_name}:latest
 
 if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
@@ -20,12 +21,11 @@ if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
     popd
 fi
 
-uid=$(id -u)
-
-docker run \
+x11docker \
+    --pulseaudio \
+        -- \
     --rm \
-    --env DISPLAY --mount type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix --mount type=bind,source=${XAUTHORITY},target=/root/.Xauthority \
-    --env PULSE_SERVER=unix:/run/user/$uid/pulse/native --mount type=bind,source=/run/user/$uid/pulse/native,target=/run/user/$uid/pulse/native \
     --shm-size=1gb \
+        -- \
     ${image} \
-    firefox "$@"
+    ${entrypoint} "$@"

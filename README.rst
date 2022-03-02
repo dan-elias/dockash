@@ -17,7 +17,9 @@ The only requirements are Docker and bash.
 These scripts have been tested on Ubuntu.  On other distros, they may work
 unchanged or may require modifications to some paths or shebang lines.
 
-Most of the programs require `jupyter-repo2docker`_ (included in this repo)
+Most of the scripts require `jupyter-repo2docker`_, and some require `x11docker
+<x11docker_script>`_ (an installer for x11docker_).  Both are included in this
+repo.
 
 
 Usage
@@ -41,7 +43,9 @@ Other similar resources
 * zoom_:  `mdouchement/zoom-us`_
 
 .. _jupyter-repo2docker: bin/jupyter-repo2docker
+.. _x11docker_script: bin/x11docker
 .. _containerized-firefox: bin/containerized-firefox
 .. _bin: bin
+.. _x11docker: https://github.com/mviereck/x11docker
 .. _zoom: https://zoom.us/
 .. _mdouchement/zoom-us: https://github.com/mdouchement/docker-zoom-us

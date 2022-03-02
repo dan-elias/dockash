@@ -24,11 +24,10 @@ if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
 fi
 
 config_volumes=()
-for f in .gitconfig .git-credentials
+for f in ${HOME}/{.gitconfig,.git-credentials}
 do
-    full_path=${HOME}/$f
-    [[ -f $full_path ]] || echo " " > $full_path
-    config_volumes+=("--volume $full_path:$full_path")
+    [[ -f $f]] || echo " " > $f
+    config_volumes+=("--mount type=bind,source=$f,target=$f")
 done
 
 docker run \

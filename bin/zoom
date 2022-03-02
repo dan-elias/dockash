@@ -1,0 +1,56 @@
+#!/bin/bash
+
+set -e
+
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+add_groups="${grps[*]/#/--group-add }"
+
+app_name=$(basename $0)
+entrypoint=${app_name#containerized-}
+image=dockash_${USER}_${app_name}:latest
+
+if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+    pushd ${DOCKASH_SOURCE:-.}
+    if [[ "$DOCKASH_SOURCE" == "" ]]; then
+        repo=https://github.com/dan-elias/dockash
+    else
+        repo=.
+    fi
+    jupyter-repo2docker  \
+        --image-name ${image} \
+        --subdir src/${app_name} \
+        $repo \
+        echo
+    popd
+fi
+
+config_volumes=()
+for d in ${HOME}/{.zoom,.conf}
+do
+    mkdir -p $d
+    config_volumes+=("--mount type=bind,source=$d,target=$d")
+done
+
+x11docker \
+    --pulseaudio \
+    --webcam \
+    --hostdisplay \
+    --gpu \
+    --hostdbus \
+    --hostipc \
+    --cap-default \
+    $add_groups \
+    --user $(id -u ${USER}):$(id -g ${USER}) \
+        -- \
+    --rm \
+    -it \
+    --shm-size=1gb \
+    ${config_volumes[@]} \
+    --env HOME \
+    --env USER \
+        -- \
+    ${image} \
+    ${entrypoint} "$@"
+
+#    --detach \
+#    ${entrypoint} "$@"

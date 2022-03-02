@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Replace this script with x11docker and run it
+
+src_url=https://raw.githubusercontent.com/mviereck/x11docker/master/x11docker
+
+pushd $(dirname $(realpath $0))
+dest_file=$(basename $0)
+temp_file=/tmp/${dest_file}
+
+if [ -z "$(which wget)" ]; then 
+    wget_command=containerized-wget
+else
+    wget_command=wget
+fi
+
+${wget_command} -O ${temp_file} ${src_url}
+chmod --reference=${dest_file} ${temp_file}
+mv ${temp_file} ${dest_file}
+popd
+$0 $@

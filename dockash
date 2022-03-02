@@ -1,0 +1,333 @@
+#!/bin/bash
+
+
+self=$(realpath --no-symlinks $0)
+script_name=$(basename $self)
+
+################################################################################
+# Usage messages
+
+declare -A usage
+
+########################################
+# Commands
+
+if [ -L $self ]; then
+    repo_type=local
+    build_cwd=$(dirname $(realpath $(readlink -f $self)))
+    repo=.
+    source_location=$build_cwd
+else
+    repo_type=remote
+    build_cwd=.
+    repo=https://github.com/dan-elias/dockash
+    source_location=$repo
+fi
+
+APP_description=$(cat <<- EOF
+APP is the name of the app to run, corresponding to a subfolder within:
+$source_location/src
+EOF
+)
+
+usage["-"]=$(cat <<- EOF
+$script_name OPERATION [OPTIONS] ...
+
+Helper script for installing and running dockash apps
+
+Operations:
+    run         Run a dockash app (installing it, if necessary)
+    check       Ensure that a dockash app is available to the current user, but
+                don't run it.
+    get-url     Download a file (without requiring download utilities like curl
+                or wget)
+
+For usage details on a specific operation, use the "-h" or "--help" options
+
+Note:  The app source code is in a $repo_type repository located at: $source_location.
+
+This script will use app source code from a local repository if it is run via a
+symbolic link pointing to the copy of this script in the root folder of the
+repository.  If it is not run via a symbolic link, it will use source directly
+from github.
+
+Example:
+    $script_name run --help
+EOF
+)
+
+########################################
+# run
+
+usage["run"]=$(cat <<- EOF
+$script_name run [OPTIONS] APP [APP PARAMS]
+
+Run a dockash app (installing it, if necessary)
+
+Options:
+    -d, --detach    Run in detached mode instead of interactively using the
+                    terminal.
+        --pwd-work  Mount the host working directory as /work within the
+                    container, and set this to the container working directory
+        --as-me     Use the current user's identity and group memberships
+                    within the container
+        --no-rm     Do not delete the container after it's finished (the
+                    default - different to docker's default)
+
+In addition to the options above, the following options are passed through
+unchanged to docker run (see: https://docs.docker.com/engine/reference/run/):
+
+        --device
+        --entrypoint
+    -e, --env
+        --expose
+        --mount
+        --network
+        --privileged
+    -u, --user
+    -v, --volume
+    -w, --workdir
+
+$APP_description   
+    
+APP PARAMS are passed through to the app running in the container.
+
+Example:
+    $script_name run git --help
+EOF
+)
+
+########################################
+# check
+
+usage["check"]=$(cat <<- EOF
+$script_name check APP
+
+Ensure that a dockash app is available to the current user, but
+don't run it.
+
+$APP_description   
+
+Example:
+    $script_name check git
+EOF
+)
+
+########################################
+# get-url
+
+usage["get-url"]=$(cat <<- EOF
+$script_name get-url [OPTIONS] URL
+
+Download a file using wget (if wget isn't installed, it is used via a docker container)
+
+Options:
+
+    -o, --outfile   Output file
+    --keep-chmod    Replace the contents of the output file, but retain its
+                    permissions (requires output file to be specified)
+    Other options for wget (eg: --no-check-certificate)
+
+Example:
+    $script_name get-url https://raw.githubusercontent.com/dan-elias/dockash/master/README.rst
+EOF
+)
+
+
+function containerized-wget {
+  app_name=containerized-wget
+  entrypoint=${app_name#containerized-}
+  image=dockash_${USER}_${app_name}:latest
+  
+  Dockerfile_content=$(cat << EOF
+    FROM ubuntu:latest
+    
+    RUN apt-get --allow-releaseinfo-change update \
+        && apt-get  install --yes --no-install-recommends \
+                wget \
+        && apt-get purge  &&  apt-get clean  &&  rm -rf /var/lib/apt/lists/*
+    
+    ENV SHELL /bin/bash
+EOF
+  )
+  
+  if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+      echo "${Dockerfile_content}" | docker build --tag ${image} -
+  fi
+  
+  docker run \
+      --rm \
+      -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` \
+      --env HOME \
+      --env USER \
+      --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+      --user $(id -u ${USER}):$(id -g ${USER}) \
+      --volume $(pwd):/work \
+      --workdir="/work" \
+      ${image} \
+      ${entrypoint} "$@"
+}
+
+
+################################################################################
+# Execution
+
+function show_usage_and_exit { # usage key, [exit code]
+    echo USAGE: "${usage["$1"]}"
+    exit ${2:-0}
+}
+
+function get_image { # app_name
+    echo dockash_${USER}_${app_name}:latest
+}
+
+
+operation=$1
+shift
+
+case $operation in
+    run)
+        run_args=()
+        no_rm=false
+        detach=false
+        while [[ $# -gt 0 ]]; do
+          case $1 in
+            -h|--help)
+              show_usage_and_exit $operation 0
+              ;;
+            -d|--detach)
+              detach=true
+              shift
+              ;;
+            --pwd-work)
+              run_args+=( --volume $(pwd):/work --workdir="/work" )
+              shift
+              ;;
+            --as-me)
+                run_args+=( --env HOME --env USER --user $(id -u ${USER}):$(id -g ${USER}) )
+                IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+                run_args+=( "${grps[*]/#/--group-add }" )
+              shift
+              ;;
+            --device|--entrypoint|-e|--env|--expose|--mount|--network|-u|--user|-v|--volume|-w|--workdir)
+              run_args+=( $1 $2 )
+              shift
+              shift
+              ;;
+            --privileged)
+              run_args+=( $1 )
+              shift
+              ;;
+            -*|--*)
+              echo unknown option: $1
+              show_usage_and_exit $operation 1
+              exit 1
+              ;;
+            *)
+              app_name=$1
+              shift
+              if $detach ; then
+                run_args+=( --detach )
+              else
+                run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` )
+              fi
+              $self check $app_name
+              echo docker run "${run_args[@]}" `get_image $app_name` $@
+              exit 0
+              ;;
+          esac
+        done
+        show_usage_and_exit $operation 1
+        ;;
+    check)
+        while [[ $# -gt 0 ]]; do
+          case $1 in
+            -h|--help)
+              show_usage_and_exit $operation 0
+              ;;
+            -*|--*)
+              show_usage_and_exit $operation 1
+              exit 1
+              ;;
+            *)
+              app_name=$1
+              shift
+              if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
+                  pushd $build_cwd
+                  echo jupyter-repo2docker  \
+                      --image-name `get_image $app_name` \
+                      --subdir src/${app_name} \
+                      $repo \
+                      echo
+                  popd
+              fi
+              exit 0
+              ;;
+          esac
+        done
+        show_usage_and_exit $operation 1
+        ;;
+    get-url)
+        outfile=""
+        keep_chmod=false
+        options=()
+        while [[ $# -gt 0 ]]; do
+          case $1 in
+            -h|--help)
+              show_usage_and_exit $operation 0
+              ;;
+            -o|--outfile)
+              outfile=$2
+              shift
+              shift
+              ;;
+            --keep-chmod)
+              keep_chmod=true
+              shift
+              ;;
+            -*|--*)
+              options+=( $1 )
+              shift
+              ;;
+            *)
+              url=$1
+              shift
+              if $keep_chmod; then
+                if [ -z "$outfile" ]; then
+                  echo --keep-chmod requires outfile to be specified
+                  exit 1
+                elif [ ! -f "$outfile" ]; then
+                  echo --keep-chmod requires outfile to exist
+                  exit 1
+                fi
+              fi
+              tempfile=$(mktemp)
+              if [ -n "$(which wget)" ]; then
+                  wget -O $tempfile "${options[@]}" $url
+              else
+                pushd `dirname $tempfile`
+                containerized-wget -O `basename $tempfile` "${options[@]}" $url
+                popd
+              fi
+              if [ -z "$outfile" ]; then
+                cat $tempfile
+                rm $tempfile
+              else
+                if $keep_chmod; then
+                  chmod --reference "$outfile" $tempfile
+                fi
+                mv $tempfile "$outfile"
+              fi
+              exit 0
+              ;;
+          esac
+        done
+        show_usage_and_exit $operation 1
+        ;;
+    -h|--help)
+        show_usage_and_exit "-" 0
+        ;;
+    *)
+        show_usage_and_exit "-" 1
+        ;;
+esac

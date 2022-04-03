@@ -1,0 +1,20 @@
+#!/bin/bash
+
+set -e
+
+app_name=$(basename $0)
+image=dockash_${USER}_${app_name}:latest
+
+config_volumes=()
+for f in ${HOME}/{.gitconfig,.git-credentials}
+do
+    [[ -f $f]] || echo " " > $f
+    config_volumes+=("--mount type=bind,source=$f,target=$f")
+done
+
+dockash run \
+    --as-me \
+    --pwd-work \
+    ${config_volumes[@]} \
+    ${app_name} "$@"
+

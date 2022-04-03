@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -e
+
+app_name=$(basename $0)
+
+dockash run \
+    --as-me \
+    --pwd-work \
+    ${app_name} "$@"

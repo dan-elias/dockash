@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# Replace this script with x11docker and run it
+
+set -e
+
+commit_hash=6f2bd38b71f5ba6e928c6381b529e6ff7bbcec0b
+src_url=https://raw.githubusercontent.com/mviereck/x11docker/${commit_hash}/x11docker
+
+self=$(realpath --no-symlinks $0)
+echo "Overwriting ${self} with ${src_url}"
+dockash get-url --chmod-ref "${self}" --outfile "${self}" ${src_url}
+$self $@

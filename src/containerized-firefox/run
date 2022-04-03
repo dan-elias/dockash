@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+app_name=$(basename $0)
+entrypoint=${app_name#containerized-}
+image=$(dockash image-name $app_name)
+dockash check-image ${app_name}
+
+x11docker \
+    --pulseaudio \
+        -- \
+    --rm \
+    --shm-size=1gb \
+        -- \
+    ${image} \
+    ${entrypoint} "$@"

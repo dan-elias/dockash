@@ -17,18 +17,26 @@ The only requirements are Docker and bash.
 These scripts have been tested on Ubuntu.  On other distros, they may work
 unchanged or may require modifications to some paths or shebang lines.
 
-Most of the scripts require `jupyter-repo2docker`_, and some require `x11docker
-<x11docker_script>`_ (an installer for x11docker_).  Both are included in this
-repo.
+
+Installation
+------------
+
+Download the dockash_ script, save it to a location that is listed in PATH.
 
 
 Usage
 -----
 
-Download the desired scripts from the bin_ folder and make them executable (and
-locatable on `PATH`).  Include `jupyter-repo2docker`_ because it is required by
-the others.  
+The apps available all have names corresponding to subfolders of the src_ folder.
 
+To make an app available, use:
+
+```bash
+dockash check-app <app name>
+```
+
+If the app isn't already installed, this will download the appropriate script
+and save it in the same location as the dockash script. 
 
 Notes
 -----
@@ -45,7 +53,7 @@ Other similar resources
 .. _jupyter-repo2docker: bin/jupyter-repo2docker
 .. _x11docker_script: bin/x11docker
 .. _containerized-firefox: bin/containerized-firefox
-.. _bin: bin
+.. _src: src
 .. _x11docker: https://github.com/mviereck/x11docker
 .. _zoom: https://zoom.us/
 .. _mdouchement/zoom-us: https://github.com/mdouchement/docker-zoom-us

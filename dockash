@@ -1,16 +1,10 @@
 #!/bin/bash
 
 
+# This script ################################################################################
+
 self=$(realpath --no-symlinks $0)
 script_name=$(basename $self)
-
-################################################################################
-# Usage messages
-
-declare -A usage
-
-########################################
-# Commands
 
 if [ -L $self ]; then
     repo_type=local
@@ -30,34 +24,307 @@ $source_location/src
 EOF
 )
 
-usage["-"]=$(cat <<- EOF
-$script_name OPERATION [OPTIONS] ...
+# Helpers ################################################################################
 
-Helper script for installing and running dockash apps
+function get_image_name { # app_name
+    app_name=$1
+    echo dockash_${USER}_${app_name}:latest
+}
 
-Operations:
-    run         Run a dockash app (installing it, if necessary)
-    check       Ensure that a dockash app is available to the current user, but
-                don't run it.
-    get-url     Download a file (without requiring download utilities like curl
-                or wget)
+declare -A usage
 
-For usage details on a specific operation, use the "-h" or "--help" options
+function show_usage_and_exit { # [exit code]
+    echo USAGE: "${usage["$operation"]}"
+    exit ${1:-0}
+}
 
-Note:  The app source code is in a $repo_type repository located at: $source_location.
 
-This script will use app source code from a local repository if it is run via a
-symbolic link pointing to the copy of this script in the root folder of the
-repository.  If it is not run via a symbolic link, it will use source directly
-from github.
+# Command functions  ##########################################################################################
+# 
+# Functions which run a command and terminate the script
+# 
+
+
+# get-url ########################################
+
+usage["get-url"]=$(cat <<- EOF
+$script_name get-url [OPTIONS] URL
+
+Download a file using wget (if wget isn't installed, it is used via a docker container)
+
+Options:
+
+    -o, --outfile   Output file
+
+    --chmod-ref     Copy permissions from this file
+
+    Other options for wget (eg: --no-check-certificate)
 
 Example:
-    $script_name run --help
+    $script_name get-url https://raw.githubusercontent.com/dan-elias/dockash/master/README.rst
 EOF
 )
 
-########################################
-# run
+containerized_wget_Dockerfile_content=$(cat <<- EOF
+FROM ubuntu:latest
+
+RUN apt-get --allow-releaseinfo-change update \
+    && apt-get  install --yes --no-install-recommends \
+        wget \
+        ca-certificates \
+    && apt-get purge  &&  apt-get clean  &&  rm -rf /var/lib/apt/lists/*
+
+ENV SHELL /bin/bash
+EOF
+)
+
+function containerized-wget {
+   image_name=$(get_image_name 'containerized-wget')
+   if [[ "$(docker images -q ${image_name} 2> /dev/null)" == "" ]]; then
+       echo "${containerized_wget_Dockerfile_content}" | docker build --tag ${image_name} -
+   fi
+  
+   docker run \
+       --rm \
+       -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` \
+       --env HOME \
+       --env USER \
+       --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+       --user $(id -u ${USER}):$(id -g ${USER}) \
+       --volume $(pwd):/work \
+       --workdir="/work" \
+       ${image_name} \
+       wget "$@"
+}
+
+
+function get-url {
+    outfile=""
+    options=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            -o|--outfile)
+                if [ -z "$2" ]; then show_usage_and_exit 0; fi
+                outfile=$2
+                shift
+                ;;
+            --chmod-ref)
+                if [ -z "$2" ]; then show_usage_and_exit 0; fi
+                chmod_ref=$2
+                shift
+                ;;
+            -*|--*)
+                options+=( $1 )
+                ;;
+            *)
+                url=$1
+                if [ -n "$2" ]; then
+                    show_usage_and_exit 1
+                fi
+                tempfile=$(mktemp)
+                if [ -n "$(which wget)" ]; then
+                    wget -O $tempfile "${options[@]}" $url
+                else
+                    pushd `dirname $tempfile`
+                    containerized-wget -O `basename $tempfile` "${options[@]}" $url
+                    popd
+                fi
+                if [ -z "$outfile" ]; then
+                    cat $tempfile
+                    rm $tempfile
+                else
+                    if [ -n "${chmod_ref}" ]; then
+                        chmod --reference "${chmod_ref}" $tempfile
+                    fi
+                    mv $tempfile "$outfile"
+                fi
+                exit 0
+                ;;
+        esac
+        shift
+    done
+    show_usage_and_exit 1
+}
+
+# check-app  ########################################
+
+usage["check-app"]=$(cat <<- EOF
+$script_name check-app [OPTIONS] APP
+
+Ensure that the specified app is available to the current user (instlaling the
+dockash version if necessary)
+
+$APP_description   
+
+Options:
+
+    -v, --verbose   Verbose output
+
+Example:
+    $script_name check-app git
+EOF
+)
+
+function check-app {
+    verbose=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            -v|--verbose)
+                verbose=true
+                ;;
+            -*|--*)
+                show_usage_and_exit 1
+                exit 1
+                ;;
+            *)
+                app_name=$1
+                if [ -n "$2" ]; then
+                    show_usage_and_exit 1
+                fi
+                app_location=$(which $app_name)
+                if [ -n "$app_location" ]; then
+                    if $verbose; then echo "Found: ${app_location}"; fi
+                else
+                    source_url_or_path=${source_location}/src/${app_name}/run
+                    dest=$(dirname $self)/${app_name}
+                    if $verbose; then echo "Installing from: ${source_url_or_path}"; fi
+                    if [ "${repo_type}" == "local" ]; then
+                        ln -s $source_url_or_path $dest
+                        chmod --reference $self $dest
+                    else
+                        $self get-url --chmod-ref $self --outfile $dest $source_url_or_path
+                    fi
+                    if $verbose; then echo "Installed: ${dest}"; fi
+                fi
+                exit 0
+                ;;
+        esac
+        shift
+    done
+    show_usage_and_exit 1
+}
+
+
+# image-name ########################################
+
+usage["check-image"]=$(cat <<- EOF
+$script_name image-name APP
+
+Return the name of an image used for an app
+
+$APP_description   
+
+Example:
+    $script_name image-name git
+EOF
+)
+
+function image-name {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            -*|--*)
+                show_usage_and_exit 1
+                exit 1
+                ;;
+            *)
+                app_name=$1
+                if [ -n "$2" ]; then
+                    show_usage_and_exit 1
+                fi
+                image_name=$(get_image_name $app_name)
+                echo $image_name
+                exit 0
+                ;;
+        esac
+        shift
+    done
+    show_usage_and_exit 1
+}
+
+
+
+# check-image ########################################
+
+usage["check-image"]=$(cat <<- EOF
+$script_name check-image [OPTIONS] APP
+
+Ensure that a dockash app is available to the current user, but
+don't run it.
+
+$APP_description   
+
+Options:
+
+    -v, --verbose   Verbose output
+
+Example:
+    $script_name check-image git
+EOF
+)
+
+function check-image {
+    verbose=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            -v|--verbose)
+                verbose=true
+                ;;
+            -*|--*)
+                show_usage_and_exit 1
+                exit 1
+                ;;
+            *)
+                app_name=$1
+                if [ -n "$2" ]; then
+                    show_usage_and_exit 1
+                fi
+                image_name=$(get_image_name $app_name)
+                if [[ -n "$(docker images -q ${image_name} 2> /dev/null)" ]]; then
+                    if $verbose; then echo "Found image: ${image_name}"; fi
+                else
+                    if $verbose; then echo "Building image: ${image_name}"; fi
+                    subdir=src/${app_name}/binder
+                    pushd $build_cwd
+                    if [ "app_name" == "jupyter-repo2docker" ]; then
+                        if [[ $repo_type == local ]]; then
+                            getter="$self get-url"
+                        else
+                            getter=cat
+                        fi
+                        dockerfile_content=$($getter ${repo}/${subdir}/Dockerfile)
+                        echo "$dockerfile_content" | docker build --tag ${image_name} - 
+                    else
+                        $self check-app jupyter-repo2docker
+                        jupyter-repo2docker  \
+                            --image-name ${image_name} \
+                            --subdir ${subdir} \
+                            ${repo} \
+                            echo
+                    fi
+                    popd
+                fi
+                exit 0
+                ;;
+        esac
+        shift
+    done
+    show_usage_and_exit 1
+}
+
+
+# run ########################################
 
 usage["run"]=$(cat <<- EOF
 $script_name run [OPTIONS] APP [APP PARAMS]
@@ -89,7 +356,7 @@ unchanged to docker run (see: https://docs.docker.com/engine/reference/run/):
     -w, --workdir
 
 $APP_description   
-    
+
 APP PARAMS are passed through to the app running in the container.
 
 Example:
@@ -97,237 +364,117 @@ Example:
 EOF
 )
 
-########################################
-# check
-
-usage["check"]=$(cat <<- EOF
-$script_name check APP
-
-Ensure that a dockash app is available to the current user, but
-don't run it.
-
-$APP_description   
-
-Example:
-    $script_name check git
-EOF
-)
-
-########################################
-# get-url
-
-usage["get-url"]=$(cat <<- EOF
-$script_name get-url [OPTIONS] URL
-
-Download a file using wget (if wget isn't installed, it is used via a docker container)
-
-Options:
-
-    -o, --outfile   Output file
-    --keep-chmod    Replace the contents of the output file, but retain its
-                    permissions (requires output file to be specified)
-    Other options for wget (eg: --no-check-certificate)
-
-Example:
-    $script_name get-url https://raw.githubusercontent.com/dan-elias/dockash/master/README.rst
-EOF
-)
-
-
-function containerized-wget {
-  app_name=containerized-wget
-  entrypoint=${app_name#containerized-}
-  image=dockash_${USER}_${app_name}:latest
-  
-  Dockerfile_content=$(cat << EOF
-    FROM ubuntu:latest
-    
-    RUN apt-get --allow-releaseinfo-change update \
-        && apt-get  install --yes --no-install-recommends \
-                wget \
-        && apt-get purge  &&  apt-get clean  &&  rm -rf /var/lib/apt/lists/*
-    
-    ENV SHELL /bin/bash
-EOF
-  )
-  
-  if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
-      echo "${Dockerfile_content}" | docker build --tag ${image} -
-  fi
-  
-  docker run \
-      --rm \
-      -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` \
-      --env HOME \
-      --env USER \
-      --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-      --user $(id -u ${USER}):$(id -g ${USER}) \
-      --volume $(pwd):/work \
-      --workdir="/work" \
-      ${image} \
-      ${entrypoint} "$@"
-}
-
-
-################################################################################
-# Execution
-
-function show_usage_and_exit { # usage key, [exit code]
-    echo USAGE: "${usage["$1"]}"
-    exit ${2:-0}
-}
-
-function get_image { # app_name
-    echo dockash_${USER}_${app_name}:latest
-}
-
-
-operation=$1
-shift
-
-case $operation in
-    run)
-        run_args=()
-        no_rm=false
-        detach=false
-        while [[ $# -gt 0 ]]; do
-          case $1 in
+function run {
+    run_args=()
+    no_rm=false
+    detach=false
+    while [[ $# -gt 0 ]]; do
+        case $1 in
             -h|--help)
-              show_usage_and_exit $operation 0
-              ;;
+                show_usage_and_exit 0
+                ;;
             -d|--detach)
-              detach=true
-              shift
-              ;;
+                detach=true
+                ;;
             --pwd-work)
-              run_args+=( --volume $(pwd):/work --workdir="/work" )
-              shift
-              ;;
+                run_args+=( --volume $(pwd):/work --workdir="/work" )
+                ;;
             --as-me)
                 run_args+=( --env HOME --env USER --user $(id -u ${USER}):$(id -g ${USER}) )
                 IFS=', ' read -r -a grps <<< "$(id -G $USER)"
-                run_args+=( "${grps[*]/#/--group-add }" )
-              shift
-              ;;
+                run_args+=( ${grps[*]/#/--group-add } )
+                ;;
             --device|--entrypoint|-e|--env|--expose|--mount|--network|-u|--user|-v|--volume|-w|--workdir)
-              run_args+=( $1 $2 )
-              shift
-              shift
-              ;;
+                run_args+=( $1 $2 )
+                shift
+                ;;
+            --command)
+                command=$2
+                shift
+                ;;
             --privileged)
-              run_args+=( $1 )
-              shift
-              ;;
+                run_args+=( $1 )
+                ;;
+            --mount-docker-socket)
+                run_args+=( --volume '/var/run/docker.sock:/var/run/docker.sock' )
+                ;;
             -*|--*)
-              echo unknown option: $1
-              show_usage_and_exit $operation 1
-              exit 1
-              ;;
+                echo unknown option: $1
+                show_usage_and_exit 1
+                exit 1
+                ;;
             *)
-              app_name=$1
-              shift
-              if $detach ; then
-                run_args+=( --detach )
-              else
-                run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` )
-              fi
-              $self check $app_name
-              echo docker run "${run_args[@]}" `get_image $app_name` $@
-              exit 0
-              ;;
-          esac
-        done
-        show_usage_and_exit $operation 1
-        ;;
-    check)
-        while [[ $# -gt 0 ]]; do
-          case $1 in
-            -h|--help)
-              show_usage_and_exit $operation 0
-              ;;
-            -*|--*)
-              show_usage_and_exit $operation 1
-              exit 1
-              ;;
-            *)
-              app_name=$1
-              shift
-              if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
-                  pushd $build_cwd
-                  echo jupyter-repo2docker  \
-                      --image-name `get_image $app_name` \
-                      --subdir src/${app_name} \
-                      $repo \
-                      echo
-                  popd
-              fi
-              exit 0
-              ;;
-          esac
-        done
-        show_usage_and_exit $operation 1
-        ;;
-    get-url)
-        outfile=""
-        keep_chmod=false
-        options=()
-        while [[ $# -gt 0 ]]; do
-          case $1 in
-            -h|--help)
-              show_usage_and_exit $operation 0
-              ;;
-            -o|--outfile)
-              outfile=$2
-              shift
-              shift
-              ;;
-            --keep-chmod)
-              keep_chmod=true
-              shift
-              ;;
-            -*|--*)
-              options+=( $1 )
-              shift
-              ;;
-            *)
-              url=$1
-              shift
-              if $keep_chmod; then
-                if [ -z "$outfile" ]; then
-                  echo --keep-chmod requires outfile to be specified
-                  exit 1
-                elif [ ! -f "$outfile" ]; then
-                  echo --keep-chmod requires outfile to exist
-                  exit 1
+                app_name=$1
+                shift
+                if [ -z "${command}" ]; then
+                    command=${app_name#containerized-}
                 fi
-              fi
-              tempfile=$(mktemp)
-              if [ -n "$(which wget)" ]; then
-                  wget -O $tempfile "${options[@]}" $url
-              else
-                pushd `dirname $tempfile`
-                containerized-wget -O `basename $tempfile` "${options[@]}" $url
-                popd
-              fi
-              if [ -z "$outfile" ]; then
-                cat $tempfile
-                rm $tempfile
-              else
-                if $keep_chmod; then
-                  chmod --reference "$outfile" $tempfile
+                if $detach ; then
+                    run_args+=( --detach )
+                else
+                    run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` )
                 fi
-                mv $tempfile "$outfile"
-              fi
-              exit 0
-              ;;
-          esac
-        done
-        show_usage_and_exit $operation 1
+                $self check-image $app_name
+                docker run "${run_args[@]}" `get_image_name $app_name` ${command} $@
+                exit 0
+                ;;
+        esac
+        shift
+    done
+    show_usage_and_exit 1
+}
+
+
+# main  ##########################################################################################
+
+usage["-"]=$(cat <<- EOF
+$script_name OPERATION [OPTIONS] ...
+
+Helper script for installing and running dockash apps
+
+Operations:
+    run         Run a dockash app (installing it, if necessary)
+
+    check-app   Ensure that the specified app is available (installing the
+                dockash version if necessary)
+
+    check-image Ensure that a dockash image is available to the current user
+
+    get-url     Download a file (without requiring download utilities like curl
+                or wget)
+
+    image-name  Get the image name for an app
+
+For usage details on a specific operation, use the "-h" or "--help" options
+
+Note:  The app source code is in a $repo_type repository located at: $source_location.
+
+This script will use app source code from a local repository if it is run via a
+symbolic link pointing to the copy of this script in the root folder of the
+repository.  If it is not run via a symbolic link, it will use source directly
+from github.
+
+Example:
+    $script_name run --help
+EOF
+)
+
+case $1 in
+    check-app|check-image|get-url|image-name|run)
+        operation=$1
+        shift
+        $operation $@
         ;;
     -h|--help)
-        show_usage_and_exit "-" 0
+        operation="-"
+        show_usage_and_exit 0
         ;;
     *)
-        show_usage_and_exit "-" 1
+        operation="-"
+        show_usage_and_exit 1
         ;;
 esac
+
+
+
+

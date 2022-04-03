@@ -7,22 +7,7 @@ add_groups="${grps[*]/#/--group-add }"
 
 app_name=$(basename $0)
 entrypoint=${app_name#containerized-}
-image=dockash_${USER}_${app_name}:latest
-
-if [[ "$(docker images -q ${image} 2> /dev/null)" == "" ]]; then
-    pushd ${DOCKASH_SOURCE:-.}
-    if [[ "$DOCKASH_SOURCE" == "" ]]; then
-        repo=https://github.com/dan-elias/dockash
-    else
-        repo=.
-    fi
-    jupyter-repo2docker  \
-        --image-name ${image} \
-        --subdir src/${app_name} \
-        $repo \
-        echo
-    popd
-fi
+image=$(dockash image-name $app_name)
 
 config_volumes=()
 for d in ${HOME}/{.zoom,.conf}
@@ -30,6 +15,9 @@ do
     mkdir -p $d
     config_volumes+=("--mount type=bind,source=$d,target=$d")
 done
+
+dockash check-image $app_name
+dockash cheak-app x11docker
 
 x11docker \
     --pulseaudio \

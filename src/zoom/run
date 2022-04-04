@@ -17,7 +17,7 @@ do
 done
 
 dockash check-image $app_name
-dockash cheak-app x11docker
+dockash install x11docker
 
 x11docker \
     --pulseaudio \

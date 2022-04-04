@@ -45,6 +45,47 @@ function show_usage_and_exit { # [exit code]
 # 
 
 
+# all-apps ########################################
+
+
+usage["all-apps"]=$(cat <<- EOF
+$script_name all-apps
+
+List all available apps
+
+Example:
+    $script_name all-apps
+EOF
+)
+
+
+function all-apps {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            *)
+                show_usage_and_exit 1
+                ;;
+        esac
+        shift
+    done
+    if [ "$repo_type" == "local" ]; then
+        ls "${build_cwd}/src"
+    else
+        $self install unzip
+        tmpdir=$(mktemp --directory)
+        pushd $tempdir
+        $self get-url -O repo.zip ${repo}/archive/refs/heads/master.zip
+        unzip repo.zip
+        ls dockash-master/src
+        popd
+        rm -r $tmpdir
+    fi
+    exit 0
+}
+
 # get-url ########################################
 
 usage["get-url"]=$(cat <<- EOF
@@ -149,31 +190,35 @@ function get-url {
     show_usage_and_exit 1
 }
 
-# check-app  ########################################
+# install  ########################################
 
-usage["check-app"]=$(cat <<- EOF
-$script_name check-app [OPTIONS] APP
+usage["install"]=$(cat <<- EOF
+$script_name install [OPTIONS] APP
 
-Ensure that the specified app is available to the current user (instlaling the
-dockash version if necessary)
+Install an app
 
 $APP_description   
 
 Options:
 
+    -f, --force     Install the app even if it is already
     -v, --verbose   Verbose output
 
 Example:
-    $script_name check-app git
+    $script_name install git
 EOF
 )
 
-function check-app {
+function install {
+    force=false
     verbose=false
     while [[ $# -gt 0 ]]; do
         case $1 in
             -h|--help)
                 show_usage_and_exit 0
+                ;;
+            -f|--force)
+                force=true
                 ;;
             -v|--verbose)
                 verbose=true
@@ -188,19 +233,25 @@ function check-app {
                     show_usage_and_exit 1
                 fi
                 app_location=$(which $app_name)
+                install_required='Y'
                 if [ -n "$app_location" ]; then
-                    if $verbose; then echo "Found: ${app_location}"; fi
-                else
+                    if $force; then
+                        if $verbose; then echo "Ignoring existing installation found at: ${app_location}"; fi
+                    else
+                        if $verbose; then echo "Found: ${app_location}"; fi
+                        install_required='N'
+                    fi
+                fi
+                if [ "$install_required" == "Y" ]; then
                     source_url_or_path=${source_location}/src/${app_name}/run
                     dest=$(dirname $self)/${app_name}
-                    if $verbose; then echo "Installing from: ${source_url_or_path}"; fi
                     if [ "${repo_type}" == "local" ]; then
                         ln -s $source_url_or_path $dest
                         chmod --reference $self $dest
                     else
                         $self get-url --chmod-ref $self --outfile $dest $source_url_or_path
                     fi
-                    if $verbose; then echo "Installed: ${dest}"; fi
+                    if $verbose; then echo "Installed: ${dest} from: ${source_location}"; fi
                 fi
                 exit 0
                 ;;
@@ -296,17 +347,20 @@ function check-image {
                 else
                     if $verbose; then echo "Building image: ${image_name}"; fi
                     subdir=src/${app_name}/binder
+                    dockerfile_url=${repo}/${subdir}/Dockerfile
                     pushd $build_cwd
                     if [ "app_name" == "jupyter-repo2docker" ]; then
                         if [[ $repo_type == local ]]; then
-                            getter="$self get-url"
+                            tmp=$(mktemp)
+                            $self get-url -O $tmp $dockerfile_url
+                            dockerfile_content=$(cat $tmp)
+                            rm $tmp
                         else
-                            getter=cat
+                            dockerfile_content=$(cat "${dockerfile_path}")
                         fi
-                        dockerfile_content=$($getter ${repo}/${subdir}/Dockerfile)
                         echo "$dockerfile_content" | docker build --tag ${image_name} - 
                     else
-                        $self check-app jupyter-repo2docker
+                        $self install jupyter-repo2docker
                         jupyter-repo2docker  \
                             --image-name ${image_name} \
                             --subdir ${subdir} \
@@ -435,8 +489,9 @@ Helper script for installing and running dockash apps
 Operations:
     run         Run a dockash app (installing it, if necessary)
 
-    check-app   Ensure that the specified app is available (installing the
-                dockash version if necessary)
+    all-apps    List all available dockash apps
+
+    install     Install an app
 
     check-image Ensure that a dockash image is available to the current user
 
@@ -460,7 +515,7 @@ EOF
 )
 
 case $1 in
-    check-app|check-image|get-url|image-name|run)
+    all-apps|install|check-image|get-url|image-name|run)
         operation=$1
         shift
         $operation $@

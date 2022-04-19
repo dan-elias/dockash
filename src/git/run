@@ -3,18 +3,10 @@
 set -e
 
 app_name=$(basename $0)
-image=dockash_${USER}_${app_name}:latest
-
-config_volumes=()
-for f in ${HOME}/{.gitconfig,.git-credentials}
-do
-    [[ -f $f]] || echo " " > $f
-    config_volumes+=("--mount type=bind,source=$f,target=$f")
-done
 
 dockash run \
     --as-me \
     --pwd-work \
-    ${config_volumes[@]} \
+    --mount type=bind,source=$HOME/.gitconfig,target=$HOME/.gitconfig \
+    --mount type=bind,source=$HOME/.git-credentials,target=$HOME/.git-credentials \
     ${app_name} "$@"
-

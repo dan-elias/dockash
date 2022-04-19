@@ -75,13 +75,13 @@ function all-apps {
         ls "${build_cwd}/src"
     else
         $self install unzip
-        tmpdir=$(mktemp --directory)
+        tempdir=$(mktemp --directory)
         pushd $tempdir
         $self get-url -O repo.zip ${repo}/archive/refs/heads/master.zip
         unzip repo.zip
         ls dockash-master/src
         popd
-        rm -r $tmpdir
+        rm -r $tempdir
     fi
     exit 0
 }
@@ -190,12 +190,12 @@ function get-url {
     show_usage_and_exit 1
 }
 
-# install  ########################################
+# install ########################################
 
 usage["install"]=$(cat <<- EOF
-$script_name install [OPTIONS] APP
+$script_name install [OPTIONS] APPS
 
-Install an app
+Install one or more apps
 
 $APP_description   
 
@@ -228,30 +228,33 @@ function install {
                 exit 1
                 ;;
             *)
-                app_name=$1
-                if [ -n "$2" ]; then
+                while [[ $# -gt 0 ]]; do
+                    app_name=$1
+                    shift
+                    app_location=$(which $app_name)
+                    install_required='Y'
+                    if [ -n "$app_location" ]; then
+                        if $force; then
+                            if $verbose; then echo "Ignoring existing installation of ${app_name} found at: ${app_location}"; fi
+                        else
+                            if $verbose; then echo "Found ${app_name}: ${app_location}"; fi
+                            install_required='N'
+                        fi
+                    fi
+                    if [ "$install_required" == "Y" ]; then
+                        source_url_or_path=${source_location}/src/${app_name}/run
+                        dest=$(dirname $self)/${app_name}
+                        if [ "${repo_type}" == "local" ]; then
+                            ln -s $source_url_or_path $dest
+                            chmod --reference $self $dest
+                        else
+                            $self get-url --chmod-ref $self --outfile $dest $source_url_or_path
+                        fi
+                        if $verbose; then echo "Installed: ${dest} from: ${source_location}"; fi
+                    fi
+                done
+                if [ -z "$app_name" ]; then
                     show_usage_and_exit 1
-                fi
-                app_location=$(which $app_name)
-                install_required='Y'
-                if [ -n "$app_location" ]; then
-                    if $force; then
-                        if $verbose; then echo "Ignoring existing installation found at: ${app_location}"; fi
-                    else
-                        if $verbose; then echo "Found: ${app_location}"; fi
-                        install_required='N'
-                    fi
-                fi
-                if [ "$install_required" == "Y" ]; then
-                    source_url_or_path=${source_location}/src/${app_name}/run
-                    dest=$(dirname $self)/${app_name}
-                    if [ "${repo_type}" == "local" ]; then
-                        ln -s $source_url_or_path $dest
-                        chmod --reference $self $dest
-                    else
-                        $self get-url --chmod-ref $self --outfile $dest $source_url_or_path
-                    fi
-                    if $verbose; then echo "Installed: ${dest} from: ${source_location}"; fi
                 fi
                 exit 0
                 ;;
@@ -264,7 +267,7 @@ function install {
 
 # image-name ########################################
 
-usage["check-image"]=$(cat <<- EOF
+usage["image-name"]=$(cat <<- EOF
 $script_name image-name APP
 
 Return the name of an image used for an app
@@ -306,10 +309,10 @@ function image-name {
 # check-image ########################################
 
 usage["check-image"]=$(cat <<- EOF
-$script_name check-image [OPTIONS] APP
+$script_name check-image [OPTIONS] APPS
 
-Ensure that a dockash app is available to the current user, but
-don't run it.
+Ensure that one or more dockash apps is available to the current user, but
+don't run them.
 
 $APP_description   
 
@@ -337,37 +340,40 @@ function check-image {
                 exit 1
                 ;;
             *)
-                app_name=$1
-                if [ -n "$2" ]; then
-                    show_usage_and_exit 1
-                fi
-                image_name=$(get_image_name $app_name)
-                if [[ -n "$(docker images -q ${image_name} 2> /dev/null)" ]]; then
-                    if $verbose; then echo "Found image: ${image_name}"; fi
-                else
-                    if $verbose; then echo "Building image: ${image_name}"; fi
-                    subdir=src/${app_name}/binder
-                    dockerfile_url=${repo}/${subdir}/Dockerfile
-                    pushd $build_cwd
-                    if [ "app_name" == "jupyter-repo2docker" ]; then
-                        if [[ $repo_type == local ]]; then
-                            tmp=$(mktemp)
-                            $self get-url -O $tmp $dockerfile_url
-                            dockerfile_content=$(cat $tmp)
-                            rm $tmp
-                        else
-                            dockerfile_content=$(cat "${dockerfile_path}")
-                        fi
-                        echo "$dockerfile_content" | docker build --tag ${image_name} - 
+                while [[ $# -gt 0 ]]; do
+                    app_name=$1
+                    shift
+                    image_name=$(get_image_name $app_name)
+                    if [[ -n "$(docker images -q ${image_name} 2> /dev/null)" ]]; then
+                        if $verbose; then echo "Found image: ${image_name}"; fi
                     else
-                        $self install jupyter-repo2docker
-                        jupyter-repo2docker  \
-                            --image-name ${image_name} \
-                            --subdir ${subdir} \
-                            ${repo} \
-                            echo
+                        if $verbose; then echo "Building image: ${image_name}"; fi
+                        subdir=src/${app_name}/binder
+                        dockerfile_url=${repo}/${subdir}/Dockerfile
+                        pushd $build_cwd
+                        if [ "$app_name" == "jupyter-repo2docker" ]; then
+                            if [[ $repo_type == local ]]; then
+                                dockerfile_content=$(cat "${dockerfile_url}")
+                            else
+                                tmp=$(mktemp)
+                                $self get-url -O $tmp $dockerfile_url
+                                dockerfile_content=$(cat $tmp)
+                                rm $tmp
+                            fi
+                            echo "$dockerfile_content" | docker build --tag ${image_name} - 
+                        else
+                            $self install jupyter-repo2docker
+                            jupyter-repo2docker  \
+                                --image-name ${image_name} \
+                                --subdir ${subdir} \
+                                ${repo} \
+                                echo
+                        fi
+                        popd
                     fi
-                    popd
+                done
+                if [ -z "$app_name" ]; then
+                    show_usage_and_exit 1
                 fi
                 exit 0
                 ;;
@@ -420,12 +426,16 @@ EOF
 
 function run {
     run_args=()
-    no_rm=false
+    container_rm=true
     detach=false
+    entrypoint=""
     while [[ $# -gt 0 ]]; do
         case $1 in
             -h|--help)
                 show_usage_and_exit 0
+                ;;
+            --no-rm)
+                container_rm=false
                 ;;
             -d|--detach)
                 detach=true
@@ -438,8 +448,12 @@ function run {
                 IFS=', ' read -r -a grps <<< "$(id -G $USER)"
                 run_args+=( ${grps[*]/#/--group-add } )
                 ;;
-            --device|--entrypoint|-e|--env|--expose|--mount|--network|-u|--user|-v|--volume|-w|--workdir)
+            --device|-e|--env|--expose|--mount|--network|-u|--user|-v|--volume|-w|--workdir)
                 run_args+=( $1 $2 )
+                shift
+                ;;
+            --entrypoint)
+                entrypoint=$2
                 shift
                 ;;
             --command)
@@ -463,10 +477,14 @@ function run {
                 if [ -z "${command}" ]; then
                     command=${app_name#containerized-}
                 fi
+                run_args+=( --entrypoint "${entrypoint}" )
+                if $rm_container ; then
+                    run_args+=( --rm )
+                fi
                 if $detach ; then
                     run_args+=( --detach )
                 else
-                    run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` )
+                    run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` --env TERM )
                 fi
                 $self check-image $app_name
                 docker run "${run_args[@]}" `get_image_name $app_name` ${command} $@

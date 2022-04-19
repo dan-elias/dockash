@@ -4,7 +4,7 @@ set -e
 
 app_name=$(basename $0)
 
-docker run \
+dockash run \
     --as-me \
     --pwd-work \
     --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -e
 
 # This script ################################################################################
 
@@ -536,7 +537,7 @@ case $1 in
     all-apps|install|check-image|get-url|image-name|run)
         operation=$1
         shift
-        $operation $@
+        $operation "$@"
         ;;
     -h|--help)
         operation="-"

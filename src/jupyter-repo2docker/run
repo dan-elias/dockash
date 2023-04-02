@@ -15,6 +15,5 @@ dockash run \
     --as-me \
     --mount-docker-socket \
     --pwd-work \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     ${config_volumes[@]} \
     ${app_name} "$@"

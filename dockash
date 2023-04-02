@@ -232,19 +232,20 @@ function install {
                 while [[ $# -gt 0 ]]; do
                     app_name=$1
                     shift
-                    app_location=$(which $app_name)
-                    install_required='Y'
+                    app_location=$(which $app_name || echo )
+                    install_required=true
                     if [ -n "$app_location" ]; then
                         if $force; then
                             if $verbose; then echo "Ignoring existing installation of ${app_name} found at: ${app_location}"; fi
                         else
                             if $verbose; then echo "Found ${app_name}: ${app_location}"; fi
-                            install_required='N'
+                            install_required=false
                         fi
                     fi
-                    if [ "$install_required" == "Y" ]; then
+                    if $install_required; then
                         source_url_or_path=${source_location}/src/${app_name}/run
                         dest=$(dirname $self)/${app_name}
+                        rm -f $dest
                         if [ "${repo_type}" == "local" ]; then
                             ln -s $source_url_or_path $dest
                             chmod --reference $self $dest
@@ -345,12 +346,23 @@ function check-image {
                     app_name=$1
                     shift
                     image_name=$(get_image_name $app_name)
+                    subdir=src/${app_name}/binder
+                    dockerfile_url=${repo}/${subdir}/Dockerfile
+                    if [ $repo_type == "local" ] && [[ -n "$(docker images -q ${image_name} 2> /dev/null)" ]]; then
+                        timestamp_file=`mktemp`
+                        docker inspect $image_name | grep  Created | sed s/\",// | sed s/.*\"// | xargs touch $timestamp_file -d
+                        newer_entries=`find ${build_cwd}/${repo}/${subdir} -newer $timestamp_file`
+                        rm $timestamp_file
+                        if [ -n "${newer_entries}" ]; then
+                            echo Deleting old image: ${image_name}
+                            echo "Updated definitions: \n${newer_entries}"
+                            docker image rm ${image_name}
+                        fi
+                    fi
                     if [[ -n "$(docker images -q ${image_name} 2> /dev/null)" ]]; then
                         if $verbose; then echo "Found image: ${image_name}"; fi
                     else
                         if $verbose; then echo "Building image: ${image_name}"; fi
-                        subdir=src/${app_name}/binder
-                        dockerfile_url=${repo}/${subdir}/Dockerfile
                         pushd $build_cwd
                         if [ "$app_name" == "jupyter-repo2docker" ]; then
                             if [[ $repo_type == local ]]; then
@@ -382,6 +394,57 @@ function check-image {
         shift
     done
     show_usage_and_exit 1
+}
+
+
+# homedir  ########################################
+
+usage["homedir"]=$(cat <<- EOF
+$script_name homedir
+
+Print the local home directory (with a fallback to the main one)
+
+The local home directory is a parent path of the current working directory
+which ends with the current user's home path ("${HOME}" in this case).  If
+there is no such parent path, the actual home directory is used. 
+
+Example:
+    $script_name homedir
+
+
+Expected output for different working directories:
+    * /mount/${USER}/my_drive${HOME}/Documents  --> /mount/${USER}/my_drive${HOME}
+    * ${HOME}/tests${HOME}/Documents --> ${HOME}/tests${HOME}
+    * /somewhere/else  --> ${HOME}
+
+EOF
+)
+
+function homedir {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_usage_and_exit 0
+                ;;
+            -*|--*)
+                echo unknown option: $1
+                show_usage_and_exit 1
+                exit 1
+                ;;
+            *)
+                show_usage_and_exit 1
+                ;;
+        esac
+        shift
+    done
+    if [[ $(pwd)/ =~ .+${HOME}/ ]]; then
+        escaped_home=$(echo ${HOME} | sed -E 's/\//\\\//g')
+        homedir=$(pwd | sed -E "s/(^.*${escaped_home})\/?.*$/\1/")
+    else
+        homedir=${HOME}
+    fi
+    echo ${homedir}
+    exit 0
 }
 
 
@@ -449,7 +512,7 @@ function run {
                 IFS=', ' read -r -a grps <<< "$(id -G $USER)"
                 run_args+=( ${grps[*]/#/--group-add } )
                 ;;
-            --device|-e|--env|--expose|--mount|--network|-u|--user|-v|--volume|-w|--workdir)
+            --device|-e|--env|--expose|--mount|--network|-p|--publish|-u|--user|-v|--volume|-w|--workdir)
                 run_args+=( $1 $2 )
                 shift
                 ;;
@@ -466,6 +529,9 @@ function run {
                 ;;
             --mount-docker-socket)
                 run_args+=( --volume '/var/run/docker.sock:/var/run/docker.sock' )
+                ;;
+            --mount-homedir)
+                run_args+=( --mount type=bind,source=$(dockash homedir),target=${HOME} )
                 ;;
             -*|--*)
                 echo unknown option: $1
@@ -488,6 +554,7 @@ function run {
                     run_args+=( -i -t  --env LINES=`tput lines` --env COLUMNS=`tput cols` --env TERM )
                 fi
                 $self check-image $app_name
+                echo docker run "${run_args[@]}" `get_image_name $app_name` ${command} "$@"
                 docker run "${run_args[@]}" `get_image_name $app_name` ${command} "$@"
                 exit 0
                 ;;
@@ -517,6 +584,8 @@ Operations:
     get-url     Download a file (without requiring download utilities like curl
                 or wget)
 
+    homedir     Get the local or main home directory
+
     image-name  Get the image name for an app
 
 For usage details on a specific operation, use the "-h" or "--help" options
@@ -534,7 +603,7 @@ EOF
 )
 
 case $1 in
-    all-apps|install|check-image|get-url|image-name|run)
+    all-apps|install|check-image|get-url|homedir|image-name|run)
         operation=$1
         shift
         $operation "$@"

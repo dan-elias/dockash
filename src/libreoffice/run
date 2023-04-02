@@ -1,0 +1,25 @@
+#!/bin/bash
+
+set -e
+
+app_name=$(basename $0)
+entrypoint=${app_name#containerized-}
+image=$(dockash image-name $app_name)
+dockash check-image ${app_name}
+
+as_me_args=( --env HOME --env USER --user $(id -u ${USER}):$(id -g ${USER}) )
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+as_me_args+=( ${grps[*]/#/--group-add } )
+
+x11docker \
+    --pulseaudio \
+    --network \
+    --clipboard \
+        -- \
+    --rm \
+    --shm-size=1gb \
+    --mount type=bind,source=$(pwd),target=/work --workdir /work \
+    "${as_me_args[@]}" \
+        -- \
+    ${image} \
+    ${entrypoint} "$@"

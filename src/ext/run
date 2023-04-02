@@ -1,0 +1,49 @@
+#!/bin/bash
+
+set -e
+
+app_name=$(basename $0)
+entrypoint="xterm -fa 'Monospace' -fs 14"
+image=$(dockash image-name $app_name)
+dockash check-image ${app_name}
+
+
+homedirs=( $(ls -d /media/${USER}/**${HOME}) )
+if [[ ${#homedirs[@]} -eq 1 ]]; then
+    homedir=${homedirs[0]}
+else
+    if [[ ${#homedirs[@]} -eq 0 ]]; then
+        echo No external home directories found.  Looked in: /media/${USER} for subdirectories matching ${HOME}
+    else
+        echo Found multiple external home directories:  "${homedirs[@]}"
+    fi
+    exit 1
+fi
+
+if [ -z "$1" ]; then
+    humedir_target_relpath=""
+else
+    homedir_target_relpath="/$1"
+fi
+
+as_me_args=( --env HOME --env USER --user $(id -u ${USER}):$(id -g ${USER}) )
+IFS=', ' read -r -a grps <<< "$(id -G $USER)"
+as_me_args+=( ${grps[*]/#/--group-add } )
+
+x11docker \
+    --pulseaudio \
+    --network \
+    --printer \
+    --clipboard \
+    --webcam \
+    --hostdisplay \
+    --sudouser=nopasswd \
+    --hostdbus \
+        -- \
+    --rm \
+    --shm-size=1gb \
+    --mount type=bind,source=${homedir},target=${HOME}${homedir_target_relpath} \
+    "${as_me_args[@]}" \
+        -- \
+    ${image} \
+    ${entrypoint}

@@ -7,6 +7,5 @@ app_name=$(basename $0)
 dockash run \
     --as-me \
     --pwd-work \
-    --env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/conda/bin \
     --mount type=bind,source=$HOME/.kaggle,target=$HOME/.kaggle \
     ${app_name} "$@"
